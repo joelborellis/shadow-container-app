@@ -1,0 +1,14 @@
+docker build -t shadow-container-app .
+
+docker run -p 8000:8000 shadow-container-app    
+
+docker tag shadow-container-app gtlcr.azurecr.io/shadow-container-app:latest
+
+docker push gtlcr.azurecr.io/shadow-container-app:latest
+
+az containerapp env create --name shadow-container-app-env --resource-group AppServices --location eastus
+
+az containerapp up -g AppServices -n shadow-container-app --environment shadow-container-app-env -l eastus --image gtlcr.azurecr.io/shadow-container-app:latest
+
+
+https://shadow-container-app.nicebeach-c4679607.eastus.azurecontainerapps.io/shadow-sk
