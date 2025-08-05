@@ -42,11 +42,6 @@ app.add_middleware(
 # Configure module-level logger
 logger = logging.getLogger("__init__.py")
 logger.setLevel(logging.INFO)
-if not logger.hasHandlers():
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s %(levelname)s %(name)s: %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
 
 
 # Define request body model
@@ -69,133 +64,6 @@ search_user_client = SearchUser()
 
 ASSISTANT_ID = os.environ.get("ASSISTANT_ID")
 
-# Global dictionary to track token usage per thread
-thread_token_usage = {}
-
-# Track when threads were last accessed for cleanup
-thread_last_access = defaultdict(float)
-MAX_THREAD_AGE_HOURS = 24  # Clean up threads older than 24 hours
-
-
-def cleanup_old_threads():
-    """Clean up token tracking for threads not accessed recently."""
-    current_time = time.time()
-    cutoff_time = current_time - (MAX_THREAD_AGE_HOURS * 3600)
-    
-    threads_to_remove = [
-        thread_id for thread_id, last_access in thread_last_access.items()
-        if last_access < cutoff_time
-    ]
-    
-    for thread_id in threads_to_remove:
-        if thread_id in thread_token_usage:
-            del thread_token_usage[thread_id]
-        del thread_last_access[thread_id]
-        logger.info(f"Cleaned up old thread: {thread_id}")
-
-
-def get_thread_token_usage(thread_id: str) -> dict:
-    """Get current token usage for a thread with access tracking."""
-    if thread_id:
-        thread_last_access[thread_id] = time.time()
-        return thread_token_usage.get(thread_id, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-    return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
-
-
-def get_all_thread_stats() -> dict:
-    """Get statistics about all tracked threads (useful for monitoring)."""
-    return {
-        "total_threads": len(thread_token_usage),
-        "total_tokens_across_all_threads": sum(usage["total_tokens"] for usage in thread_token_usage.values()),
-        "threads": {thread_id: usage for thread_id, usage in thread_token_usage.items()}
-    }
-
-
-def extract_and_accumulate_tokens(response, thread_id: str) -> dict:
-    """
-    Extract token usage from the response and accumulate it for the thread.
-    
-    Args:
-        response: The agent response object
-        thread_id: The thread ID to track tokens for
-        
-    Returns:
-        dict: Current accumulated token usage for the thread
-    """
-    if not thread_id:
-        return {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
-    
-    # Initialize thread token tracking if not exists
-    if thread_id not in thread_token_usage:
-        thread_token_usage[thread_id] = {
-            "input_tokens": 0,
-            "output_tokens": 0, 
-            "total_tokens": 0
-        }
-    
-    # Extract token usage from response metadata
-    current_usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
-    
-    try:
-        # First, try model_dump_json() to get the complete response structure
-        if hasattr(response, 'model_dump_json'):
-            try:
-                response_json = response.model_dump_json()
-                response_data = json.loads(response_json)
-                
-                # Check for usage field directly (most common case)
-                if 'usage' in response_data and isinstance(response_data['usage'], dict):
-                    usage = response_data['usage']
-                    current_usage = {
-                        "input_tokens": usage.get('prompt_tokens', 0),
-                        "output_tokens": usage.get('completion_tokens', 0),
-                        "total_tokens": usage.get('total_tokens', 0)
-                    }
-                    if current_usage["total_tokens"] > 0:
-                        logger.info(f"Found token usage in model_dump_json: {current_usage}")
-                        
-            except Exception as e:
-                logger.debug(f"Error in model_dump_json processing: {e}")
-        
-        # Fallback to direct attribute access if model_dump_json didn't work or find usage
-        if current_usage["total_tokens"] == 0 and hasattr(response, 'usage') and response.usage:
-            current_usage["input_tokens"] = getattr(response.usage, 'prompt_tokens', 0)
-            current_usage["output_tokens"] = getattr(response.usage, 'completion_tokens', 0) 
-            current_usage["total_tokens"] = getattr(response.usage, 'total_tokens', 0)
-            
-            if current_usage["total_tokens"] > 0:
-                logger.info(f"Found token usage in response.usage: {current_usage}")
-        
-        # Check for usage in metadata if other methods didn't work
-        elif current_usage["total_tokens"] == 0 and hasattr(response, 'metadata') and response.metadata:
-            usage = response.metadata.get('usage', {})
-            if usage:
-                current_usage["input_tokens"] = usage.get('prompt_tokens', 0)
-                current_usage["output_tokens"] = usage.get('completion_tokens', 0)
-                current_usage["total_tokens"] = usage.get('total_tokens', 0)
-                
-                if current_usage["total_tokens"] > 0:
-                    logger.info(f"Found token usage in response metadata: {current_usage}")
-                        
-    except Exception as e:
-        logger.error(f"Error extracting token usage: {e}")
-    
-    # Accumulate the usage for this thread
-    if current_usage["total_tokens"] > 0:
-        thread_token_usage[thread_id]["input_tokens"] += current_usage["input_tokens"]
-        thread_token_usage[thread_id]["output_tokens"] += current_usage["output_tokens"]
-        thread_token_usage[thread_id]["total_tokens"] += current_usage["total_tokens"]
-        
-        logger.info(f"Updated thread {thread_id} token usage: {thread_token_usage[thread_id]}")
-    
-    return thread_token_usage[thread_id].copy()
-
-
-def reset_thread_tokens(thread_id: str):
-    """Reset token tracking for a thread."""
-    if thread_id in thread_token_usage:
-        del thread_token_usage[thread_id]
-        logger.info(f"Reset token tracking for thread: {thread_id}")
 
 
 def create_chat_messages_from_request(request: ShadowRequest) -> list[ChatMessageContent]:
@@ -342,8 +210,6 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
             threadId = request.threadId
             current_thread = AssistantAgentThread(client=agent.client, thread_id=threadId) if threadId else None
             
-            # If no threadId provided, we'll get a new one from the response and reset token tracking
-            is_new_thread = not bool(threadId)
             
             additional_instructions = (
                 f"<additional_instructions>{request.additional_instructions}</additional_instructions>"
@@ -351,31 +217,94 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
             )
 
             first_chunk = True
-            actual_thread_id = threadId
-              # Process the stream and yield events as soon as they are available
+            actual_thread_id = None
+
+            # Process the stream and yield events as soon as they are available
             async for response in agent.invoke_stream(
                 messages=messages,
                 thread=current_thread,
                 additional_instructions=additional_instructions,
                 on_intermediate_message=handle_intermediate_message,  # Add the callback here
-            ):
-                # Extract thread ID from response if we didn't have one
-                if hasattr(response, 'thread') and response.thread:
-                    actual_thread_id = getattr(response.thread, 'id', threadId)
-                
-                # If this is a new thread (no threadId was provided), reset token tracking
-                if is_new_thread and actual_thread_id:
-                    reset_thread_tokens(actual_thread_id)
-                    is_new_thread = False  # Only reset once per request
-                  # Yield thread info on first chunk (without token usage - tokens will be sent after completion)
+            ):  
+                # Yield thread info on first chunk (without token usage - tokens will be sent after completion)
                 if first_chunk:
+                    # Get the actual thread ID from various sources
+                    if current_thread and current_thread.thread_id:
+                        actual_thread_id = current_thread.thread_id
+                        logger.info(f"Using thread_id from current_thread: {actual_thread_id}")
+                    elif threadId:
+                        actual_thread_id = threadId
+                        logger.info(f"Using provided threadId: {actual_thread_id}")
+                    else:
+                        # When no thread is provided, the agent creates one internally
+                        # Try multiple approaches to get the thread ID
+                        try:
+                            logger.info("Searching for thread ID in agent and response objects...")
+                            
+                            # Method 1: Check agent attributes
+                            agent_attrs = [attr for attr in dir(agent) if 'thread' in attr.lower()]
+                            logger.info(f"Agent thread-related attributes: {agent_attrs}")
+                            
+                            # Method 2: Check response attributes more thoroughly
+                            response_attrs = [attr for attr in dir(response) if not attr.startswith('__')]
+                            logger.info(f"Response attributes: {response_attrs[:10]}...")  # Log first 10
+                            
+                            # Method 3: Try to access common thread locations
+                            potential_locations = [
+                                ('agent.thread', lambda: getattr(agent, 'thread', None)),
+                                ('agent._thread', lambda: getattr(agent, '_thread', None)),
+                                ('agent.current_thread', lambda: getattr(agent, 'current_thread', None)),
+                                ('response.thread', lambda: getattr(response, 'thread', None)),
+                                ('response._thread', lambda: getattr(response, '_thread', None)),
+                            ]
+                            
+                            for location_name, getter in potential_locations:
+                                try:
+                                    thread_obj = getter()
+                                    if thread_obj:
+                                        logger.info(f"Found thread object at {location_name}: {type(thread_obj)}")
+                                        if hasattr(thread_obj, 'thread_id'):
+                                            actual_thread_id = thread_obj.thread_id
+                                            logger.info(f"Successfully extracted thread_id from {location_name}: {actual_thread_id}")
+                                            break
+                                        elif isinstance(thread_obj, str):
+                                            actual_thread_id = thread_obj
+                                            logger.info(f"Found string thread_id at {location_name}: {actual_thread_id}")
+                                            break
+                                except Exception as e:
+                                    logger.debug(f"Could not access {location_name}: {e}")
+                            
+                            if not actual_thread_id:
+                                # Last resort: try to find thread ID in response content if it's a dict-like object
+                                if hasattr(response, '__dict__'):
+                                    response_dict = response.__dict__
+                                    for key, value in response_dict.items():
+                                        if 'thread' in key.lower() and isinstance(value, str) and value.startswith('thread_'):
+                                            actual_thread_id = value
+                                            logger.info(f"Found thread_id in response.__dict__['{key}']: {actual_thread_id}")
+                                            break
+                                        elif hasattr(value, 'thread_id'):
+                                            actual_thread_id = value.thread_id
+                                            logger.info(f"Found thread_id in response.__dict__['{key}'].thread_id: {actual_thread_id}")
+                                            break
+                            
+                            if not actual_thread_id:
+                                actual_thread_id = 'Auto-Generated'
+                                logger.info("Could not extract thread_id from any location")
+                                
+                        except Exception as e:
+                            logger.error(f"Error searching for thread info: {e}")
+                            actual_thread_id = 'Auto-Generated'
+                    
                     thread_info = {
                         "type": "thread_info",
-                        "agent_name": getattr(response, 'name', 'Unknown'),
-                        "thread_id": actual_thread_id or 'Unknown'
+                        "agent_name": getattr(response, 'name', 'ShadowAssistant'),
+                        "thread_id": actual_thread_id
                     }
                     await event_queue.put(format_sse_event("thread_info", thread_info))
-                    first_chunk = False# Handle regular response content
+                    first_chunk = False 
+                
+                # Handle regular response content
                 content = ""
                 if hasattr(response, 'content') and response.content is not None:
                     content = str(response.content)
@@ -384,60 +313,9 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
                         "type": "content",
                         "content": content
                     }
-                    await event_queue.put(format_sse_event("content", content_data))            # After stream completion, get token usage from the completed run
-            try:
-                if agent and actual_thread_id:
-                    # List the runs for this thread to get the latest run with token usage
-                    runs = await agent.client.beta.threads.runs.list(
-                        thread_id=actual_thread_id,
-                        limit=1
-                    )
-                    
-                    if runs.data and len(runs.data) > 0:
-                        latest_run = runs.data[0]
-                        logger.info(f"Latest run status: {latest_run.status}")
-                        
-                        # Extract and accumulate token usage from the completed run
-                        if hasattr(latest_run, 'usage') and latest_run.usage:
-                            prompt_tokens = getattr(latest_run.usage, 'prompt_tokens', 0) or 0
-                            completion_tokens = getattr(latest_run.usage, 'completion_tokens', 0) or 0
-                            total_tokens = getattr(latest_run.usage, 'total_tokens', 0) or 0
-                            
-                            if total_tokens > 0:
-                                # Initialize thread token tracking if not exists
-                                if actual_thread_id not in thread_token_usage:
-                                    thread_token_usage[actual_thread_id] = {
-                                        "input_tokens": 0,
-                                        "output_tokens": 0,
-                                        "total_tokens": 0
-                                    }
-                                
-                                # Accumulate the tokens for this request
-                                thread_token_usage[actual_thread_id]["input_tokens"] += prompt_tokens
-                                thread_token_usage[actual_thread_id]["output_tokens"] += completion_tokens
-                                thread_token_usage[actual_thread_id]["total_tokens"] += total_tokens
-                                
-                                logger.info(f"Updated thread {actual_thread_id} token usage: {thread_token_usage[actual_thread_id]}")
-                            else:
-                                logger.info(f"No token usage found in latest run for thread {actual_thread_id}")
-                        else:
-                            logger.info(f"No usage data found in latest run for thread {actual_thread_id}")
-                    else:
-                        logger.info(f"No runs found for thread {actual_thread_id}")
-                        
-            except Exception as e:
-                logger.error(f"Error retrieving run status from thread: {e}")
-
-            # Send token usage event just before stream completion
-            final_token_usage = thread_token_usage.get(actual_thread_id, {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0})
-            if final_token_usage["total_tokens"] > 0:
-                await event_queue.put(format_sse_event("token_usage", {
-                    "type": "token_usage",
-                    "thread_id": actual_thread_id,
-                    "token_usage": final_token_usage
-                }))
+                    await event_queue.put(format_sse_event("content", content_data))
             
-            # Send stream completion event
+            # Send stream completion event after the loop
             await event_queue.put(format_sse_event("stream_complete", {
                 "type": "stream_complete"
             }))
@@ -489,41 +367,3 @@ async def shadow_sk(request: ShadowRequest):
             "X-Accel-Buffering": "no",  # Disable nginx buffering
         },
     )
-
-
-# Optional: Add endpoint for monitoring token usage
-@app.get("/shadow-sk/stats")
-async def get_token_stats():
-    """
-    Get current token usage statistics for all threads.
-    """
-    # Clean up old threads before returning stats
-    cleanup_old_threads()
-    
-    return {
-        "timestamp": time.time(),
-        "statistics": get_all_thread_stats()
-    }
-
-
-@app.get("/shadow-sk/health")
-async def health_check():
-    """
-    Health check endpoint with token tracking diagnostics.
-    """
-    return {
-        "status": "healthy",
-        "timestamp": time.time(),
-        "token_tracking": {
-            "active_threads": len(thread_token_usage),
-            "total_tokens_tracked": sum(usage["total_tokens"] for usage in thread_token_usage.values()),            "optimizations_active": True,            "features": [
-                "Token usage extracted from completed runs (not streaming chunks)",
-                "Direct run.usage attribute access for accurate token counts", 
-                "Automatic thread cleanup",
-                "Cumulative token tracking per thread",
-                "Real-time streaming with post-completion token accumulation",
-                "Token usage sent as separate event after stream completion"
-            ]
-        },
-        "assistant_id": ASSISTANT_ID is not None
-    }

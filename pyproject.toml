@@ -8,5 +8,6 @@ dependencies = [
     "azure-search-documents==11.6.0b4",
     "fastapi[standard]>=0.116.1",
     "openai>=1.98.0",
-    "semantic-kernel>=1.32.2",
+    "openai-agents>=0.2.4",
+    "semantic-kernel>=1.35.1",
 ]

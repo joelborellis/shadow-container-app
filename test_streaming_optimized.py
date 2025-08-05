@@ -70,25 +70,28 @@ async def test_streaming_events():
                                     data_str = line_str.split(':', 1)[1].strip()
                                     try:
                                         data = json.loads(data_str)
-                                        await handle_event(data, content_buffer, content_started)
-                                          # Update content state
+                                        
+                                        # Update content state
                                         if data.get('type') == 'content':
                                             if not content_started:
                                                 print("\n[CONTENT] ", end="", flush=True)
                                                 content_started = True
                                             content_buffer += data['content']
                                             print(data['content'], end="", flush=True)
-                                        elif data.get('type') in ['function_call', 'function_result', 'intermediate', 'token_usage']:
+                                        elif data.get('type') in ['function_call', 'function_result', 'intermediate', 'thread_info']:
                                             if content_started:
                                                 print()  # New line to finish content
                                                 content_started = False
                                                 content_buffer = ""
+                                            await handle_event(data)
                                         elif data.get('type') == 'stream_complete':
                                             if content_started:
                                                 print()  # New line to finish content
                                             print(f"\n[STREAM COMPLETE]")
                                             sys.stdout.flush()
                                             return
+                                        elif data.get('type') == 'error':
+                                            await handle_event(data)
                                             
                                     except json.JSONDecodeError as e:
                                         print(f"[ERROR] Invalid JSON: {data_str} - {e}")
@@ -106,7 +109,7 @@ async def test_streaming_events():
         print(f"[CONNECTION ERROR] {e}")
         print("Make sure the FastAPI server is running on the expected port.")
 
-async def handle_event(data, content_buffer, content_started):
+async def handle_event(data):
     """Handle individual event types for immediate display."""
     event_type = data.get('type')
     
@@ -125,20 +128,8 @@ async def handle_event(data, content_buffer, content_started):
         print(f"[THREAD] Agent={data['agent_name']}, Thread={data['thread_id']}")
         sys.stdout.flush()
         
-    elif event_type == 'token_usage':
-        token_info = data.get('token_usage', {})
-        print(f"[TOKEN USAGE] Thread: {data.get('thread_id', 'Unknown')}")
-        print(f"   Input Tokens: {token_info.get('input_tokens', 0)}")
-        print(f"   Output Tokens: {token_info.get('output_tokens', 0)}")
-        print(f"   Total Tokens: {token_info.get('total_tokens', 0)}")
-        sys.stdout.flush()
-        
     elif event_type == 'intermediate':
         print(f"[INTERMEDIATE] {data['content']}")
-        sys.stdout.flush()
-        
-    elif event_type == 'intermediate_error':
-        print(f"[INTERMEDIATE ERROR] {data['error']} (Item type: {data['item_type']})")
         sys.stdout.flush()
         
     elif event_type == 'error':
