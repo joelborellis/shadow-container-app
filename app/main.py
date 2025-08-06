@@ -64,8 +64,6 @@ search_user_client = SearchUser()
 
 ASSISTANT_ID = os.environ.get("ASSISTANT_ID")
 
-
-
 def create_chat_messages_from_request(request: ShadowRequest) -> list[ChatMessageContent]:
     """
     Convert ShadowRequest to a list of ChatMessageContent objects.

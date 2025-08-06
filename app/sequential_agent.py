@@ -3,13 +3,15 @@
 import asyncio
 import os
 
-from semantic_kernel.agents import Agent, ConcurrentOrchestration, OpenAIResponsesAgent, OpenAIAssistantAgent
+from semantic_kernel.agents import Agent, SequentialOrchestration, OpenAIResponsesAgent, OpenAIAssistantAgent
 from semantic_kernel.agents.runtime import InProcessRuntime
 from semantic_kernel.contents import FunctionCallContent, FunctionResultContent
 from semantic_kernel.contents.streaming_chat_message_content import StreamingChatMessageContent
 
 # Import the modified plugin class
-from .plugins.shadow_insights_plugin import ShadowInsightsPlugin
+from .plugins.shadow_salesdocs_plugin import ShadowSalesDocsPlugin
+from .plugins.shadow_account_plugin import ShadowAccountPlugin
+from .plugins.shadow_client_plugin import ShadowClientPlugin
 
 from .tools.searchshadow import SearchShadow
 from .tools.searchcustomer import SearchCustomer
@@ -112,9 +114,19 @@ async def get_agents() -> list[OpenAIAssistantAgent]:
 
     Feel free to add or remove agents.
     """
-    # Instantiate ShadowInsightsPlugin and pass the search clients
-    shadow_plugin = ShadowInsightsPlugin(
-            search_shadow_client, search_customer_client, search_user_client
+    # Instantiate ShadowSalesDocsPlugin and pass the search clients
+    shadow_salesdocs_plugin = ShadowSalesDocsPlugin(
+            search_shadow_client
+        )
+    
+    # Instantiate ShadowSalesDocsPlugin and pass the search clients
+    shadow_account_plugin = ShadowAccountPlugin(
+            search_customer_client
+        )
+    
+    # Instantiate ShadowSalesDocsPlugin and pass the search clients
+    shadow_client_plugin = ShadowClientPlugin(
+            search_user_client
         )
 
     # Create the client using Azure OpenAI resources and configuration
@@ -135,15 +147,31 @@ async def get_agents() -> list[OpenAIAssistantAgent]:
     # 1. Create the client using Azure OpenAI resources and configuration
     client = OpenAIResponsesAgent.create_client(ai_model_id="gpt-4.1-mini")
     
-    shadow_agent = OpenAIResponsesAgent(
-        name="ShadowAgent",
-        instructions=INSTRUCTIONS,
+    shadow_salesdocs_agent = OpenAIResponsesAgent(
+        name="ShadowSalesDocsAgent",
+        instructions="You are a retriever Agent.  You handle retrieval requests for sales documents.",
         ai_model_id="gpt-4.1-mini",
         client=client,
-        plugins=[shadow_plugin]
+        plugins=[shadow_salesdocs_plugin]
     )
 
-    return [shadow_agent]
+    shadow_account_agent = OpenAIResponsesAgent(
+        name="ShadowAccountAgent",
+        instructions="You are a retriever Agent.  You handle retrieval requests for account documents.",
+        ai_model_id="gpt-4.1-mini",
+        client=client,
+        plugins=[shadow_account_plugin]
+    )
+
+    shadow_client_agent = OpenAIResponsesAgent(
+        name="ShadowClientAgent",
+        instructions="You are a retriever Agent.  You handle retrieval requests for client documents.",
+        ai_model_id="gpt-4.1-mini",
+        client=client,
+        plugins=[shadow_client_plugin]
+    )
+
+    return [shadow_salesdocs_agent, shadow_account_agent, shadow_client_agent]
 
 # This callback function will be called for each intermediate message,
 # which will allow one to handle FunctionCallContent and FunctionResultContent.
@@ -173,7 +201,7 @@ async def main():
     """Main function to run the agents."""
     # 1. Create a concurrent orchestration with multiple agents
     agents = await get_agents()
-    concurrent_orchestration = ConcurrentOrchestration(members=agents, streaming_agent_response_callback=handle_streaming_intermediate_steps)
+    concurrent_orchestration = SequentialOrchestration(members=agents, streaming_agent_response_callback=handle_streaming_intermediate_steps)
     #concurrent_orchestration = ConcurrentOrchestration(members=agents)
 
 
@@ -183,7 +211,7 @@ async def main():
 
     # 3. Invoke the orchestration with a task and the runtime
     orchestration_result = await concurrent_orchestration.invoke(
-        task="Describe synergies between my company the the account. Context: AccountName: Allina Health ClientName: Growth Orbit",
+        task="Summarize what the account does and similarities to my company.  Context: AccountName: Allina Health ClientName: Growth Orbit",
         runtime=runtime,
     )
 
@@ -195,8 +223,8 @@ async def main():
     
     # Since we're using streaming callbacks, the response is already printed above
     # Uncomment the lines below if you want to see the final consolidated results
-    for item in value:
-        print(f"# {item.name}: {item.model_dump_json(indent=2)}")
+    #for item in value:
+    #    print(f"# {item.name}: {item.model_dump_json(indent=2)}")
 
     # 5. Stop the runtime after the invocation is complete
     await runtime.stop_when_idle()
