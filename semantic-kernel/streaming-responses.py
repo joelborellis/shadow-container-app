@@ -52,7 +52,7 @@ async def main():
     agent = OpenAIResponsesAgent(
         ai_model_id="gpt-4.1-mini",
         client=client,
-        name="ResponsesAgentSK",
+        name="ShadowInsightsAgent",
         instructions="Answer questions about the menu.",
         plugins=[MenuPlugin()],
     )
@@ -91,7 +91,7 @@ async def main():
                 if first_chunk:
                     print(f"# {response.name}: ", end="", flush=True)
                     first_chunk = False
-                print(response.content, end="", flush=True)
+                print(response.content.metadata, end="", flush=True)
             print()
     except KeyboardInterrupt:
         print("\nGoodbye!")

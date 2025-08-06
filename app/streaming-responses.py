@@ -1,15 +1,26 @@
 import asyncio
-from typing import Annotated
 import os
+import json
 
 from semantic_kernel.agents import OpenAIResponsesAgent
 from semantic_kernel.contents import AuthorRole, FunctionCallContent, FunctionResultContent
 from semantic_kernel.contents.chat_message_content import ChatMessageContent
-from semantic_kernel.functions import kernel_function
+
+from .tools.searchshadow import SearchShadow
+from .tools.searchcustomer import SearchCustomer
+from .tools.searchclient import SearchUser
+
+# Import the modified plugin class
+from .plugins.shadow_insights_plugin import ShadowInsightsPlugin
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Instantiate search clients as singletons (if they are thread-safe or handle concurrency internally)
+search_shadow_client = SearchShadow()
+search_customer_client = SearchCustomer()
+search_user_client = SearchUser()
 
 ASSISTANT_ID = os.environ.get("ASSISTANT_ID")
 
@@ -86,24 +97,6 @@ Context:
 Use this framework to deliver **concise, high‑impact** guidance that accelerates every sales pursuit."""
 
 
-# Define a sample plugin for the sample
-class MenuPlugin:
-    """A sample Menu Plugin used for the concept sample."""
-
-    @kernel_function(description="Provides a list of specials from the menu.")
-    def get_specials(self) -> Annotated[str, "Returns the specials from the menu."]:
-        return """
-        Special Soup: Clam Chowder
-        Special Salad: Cobb Salad
-        Special Drink: Chai Tea
-        """
-
-    @kernel_function(description="Provides the price of the requested menu item.")
-    def get_item_price(
-        self, menu_item: Annotated[str, "The name of the menu item."]
-    ) -> Annotated[str, "Returns the price of the menu item."]:
-        return "$9.99"
-
 
 # This callback function will be called for each intermediate message,
 # which will allow one to handle FunctionCallContent and FunctionResultContent.
@@ -112,7 +105,10 @@ class MenuPlugin:
 async def handle_streaming_intermediate_steps(message: ChatMessageContent) -> None:
     for item in message.items or []:
         if isinstance(item, FunctionResultContent):
-            print(f"Function Result:> {item.result} for function: {item.name}")
+            result_preview = str(item.result)[:100]
+            if len(str(item.result)) > 100:
+                result_preview += "..."
+            print(f"Function Result:> {result_preview} for function: {item.name}")
         elif isinstance(item, FunctionCallContent):
             print(f"Function Call:> {item.name} with arguments: {item.arguments}")
         else:
@@ -123,21 +119,26 @@ async def main():
     # 1. Create the client using Azure OpenAI resources and configuration
     client = OpenAIResponsesAgent.create_client(ai_model_id="gpt-4.1-mini")
 
-    # 2. Create a Semantic Kernel agent for the OpenAI Responses API
+    # 2. Instantiate ShadowInsightsPlugin and pass the search clients
+    shadow_plugin = ShadowInsightsPlugin(
+            search_shadow_client, search_customer_client, search_user_client
+        )
+
+    # 3. Create a Semantic Kernel agent for the OpenAI Responses API
     agent = OpenAIResponsesAgent(
         ai_model_id="gpt-4.1-mini",
         client=client,
-        name="ResponsesAgentSK",
-        instructions="Answer questions about the menu.",
-        plugins=[MenuPlugin()],
+        name="ShadowInsightsAgent",
+        instructions=INSTRUCTIONS,
+        plugins=[shadow_plugin],
     )
 
-    # 3. Create a thread for the agent
+    # 4. Create a thread for the agent
     # If no thread is provided, a new thread will be
     # created and returned with the initial response
     thread = None
 
-    print("Welcome! You can ask questions about the menu. Type 'exit' or 'quit' to end the conversation.")
+    print("Welcome to Shadow Seller Agent.")
     print("-" * 60)
 
     try:
@@ -160,7 +161,7 @@ async def main():
             async for response in agent.invoke_stream(
                 messages=user_input,
                 thread=thread,
-                on_intermediate_message=handle_streaming_intermediate_steps,
+                #on_intermediate_message=handle_streaming_intermediate_steps,
             ):
                 thread = response.thread
                 if first_chunk:

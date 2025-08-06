@@ -78,7 +78,7 @@ async def test_streaming_events():
                                                 content_started = True
                                             content_buffer += data['content']
                                             print(data['content'], end="", flush=True)
-                                        elif data.get('type') in ['function_call', 'function_result', 'intermediate', 'thread_info']:
+                                        elif data.get('type') in ['function_call', 'function_result', 'intermediate']:
                                             if content_started:
                                                 print()  # New line to finish content
                                                 content_started = False
@@ -122,10 +122,6 @@ async def handle_event(data):
         print(f"[FUNC RESULT] {data['function_name']}")
         result_preview = str(data['result'])[:100] + "..." if len(str(data['result'])) > 100 else str(data['result'])
         print(f"   Result: {result_preview}")
-        sys.stdout.flush()
-        
-    elif event_type == 'thread_info':
-        print(f"[THREAD] Agent={data['agent_name']}, Thread={data['thread_id']}")
         sys.stdout.flush()
         
     elif event_type == 'intermediate':
