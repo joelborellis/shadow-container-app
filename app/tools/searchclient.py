@@ -48,9 +48,9 @@ class SearchUser:
             print(ai_response_msg)
             return None
 
-    async def search_hybrid(self, query: str, ClientId: str, ClientName: str) -> str:
+    async def search_hybrid(self, query: str, ClientName: str) -> str:
         try:
-            print(f"[SearchClient] Performing hybrid search for query: {query} - {ClientId} - {ClientName}")
+            print(f"[SearchClient] Performing hybrid search for query: {query}  - {ClientName}")
             vector = await self.get_embedding(query, self.model)
             if not vector:
                 return "No results found."
@@ -70,7 +70,7 @@ class SearchUser:
                     }
                 ],
                 "select": "title,OriginalFilename,chunk",
-                "top": 10,
+                "top": 5,
             }
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=payload) as resp:

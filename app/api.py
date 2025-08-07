@@ -54,11 +54,11 @@ You are the **Sales Training Agent**. Your mission is to deliver **relevant, pra
 |-------|---------|-----------|
 | **Query**           | The user’s actual question | Use it to decide what advice is needed. |
 | **AccountName**     | Target customer / prospect | Pass to `get_customer_docs` when you need account-specific info. |
-| **ClientName / ClientId** | The user’s own company identifiers | Pass to `get_user_docs` for internal resources. |
+| **ClientName / ClientId** | The user’s own company identifiers | Pass to `get_user_docs` when you need user-company specific info. user-company is also referred to as the 'ClientName' |
 | **Demand Stage**    | Current sales‑cycle stage (e.g., *Interest*, *Evaluation*) | Tailor depth and tactics to this stage. |
 
 <details>
-<summary>Example</summary>
+<summary>Example Context received from User Query</summary>
 
 ```text
 Query: What are some synergies between my company and the prospect account?
@@ -99,17 +99,29 @@ Context:
 
 ---
 
-### Example Workflow
+### Example Workflow 1
 
 1. **User Asks:**  
    “Help me assess our winnability at Allina Health.”
 
 2. **You Decide:**  
    * Strategy topic → call `get_sales_docs`  
-   * Account‑specific → call `get_customer_docs` with *Allina Health*
+   * Account‑specific → call `get_customer_docs` with AccountName - *Allina Health*
 
 3. **Craft Response:**  
    *Blend playbook insights with customer intel; finish with an action checklist and one or two reflective questions.*
+   
+### Example Workflow 2
+
+1. **User Asks:**  
+   “Help me assess the synergies between my company and the prospect account.”
+
+2. **You Decide:**   
+   * User-company-specific (ClientName) → call `get_user_docs` with ClientName
+   * Account‑specific → call `get_customer_docs` with AccountName
+
+3. **Craft Response:**  
+   *Blend User-company-specific (ClientName) and Account-specific insights; finish with an action checklist and one or two reflective questions.*
 
 ---
 
@@ -294,10 +306,10 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
                 yield format_sse_event("thread_info", thread_info_data)
                 thread_info_sent = True
             
-            if first_chunk:
-                print(f"# {response.name}: ", end="", flush=True)
-                first_chunk = False
-            print(response.content, end="", flush=True)
+            #if first_chunk:
+                #print(f"# {response.name}: ", end="", flush=True)
+                #first_chunk = False
+            #print(response.content, end="", flush=True)
             
             # Handle regular response content - yield directly for lowest latency
             content = ""

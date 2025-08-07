@@ -69,7 +69,7 @@ class SearchShadow:
                     }
                 ],
                 "select": "category,sourcefile,content",
-                "top": 1,
+                "top": 3,
             }
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=payload) as resp:
