@@ -15,7 +15,7 @@ from .tools.searchshadow import SearchShadow
 from .tools.searchcustomer import SearchCustomer
 from .tools.searchclient import SearchUser
 
-from semantic_kernel.agents import OpenAIAssistantAgent, AssistantAgentThread, OpenAIResponsesAgent
+from semantic_kernel.agents import OpenAIAssistantAgent, OpenAIResponsesAgent, ResponsesAgentThread
 from semantic_kernel.contents.chat_message_content import (
     ChatMessageContent,
     FunctionCallContent,
@@ -177,7 +177,7 @@ def create_chat_messages_from_request(request: ShadowRequest) -> list[ChatMessag
     
     return messages
 
-async def get_agent() -> Optional[OpenAIAssistantAgent]:
+async def get_agent() -> Optional[OpenAIResponsesAgent]:
 
     try:
         # 1. Create the client using Azure OpenAI resources and configuration
@@ -195,6 +195,7 @@ async def get_agent() -> Optional[OpenAIAssistantAgent]:
             name="ShadowInsightsAgent",
             instructions=INSTRUCTIONS,
             plugins=[shadow_plugin],
+            store_enabled=True,
         )
 
         if agent is None:
@@ -212,7 +213,7 @@ async def get_agent() -> Optional[OpenAIAssistantAgent]:
 async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
     """
     Asynchronously stream responses back to the caller using Server-Sent Events (SSE).
-    Simplified approach using direct asyncio.Queue without extra wrapper classes.
+    Optimized approach with direct yielding for content and queue only for intermediate events.
     """
     def safe_serialize(data):
         if isinstance(data, (str, int, float, bool, list, dict, type(None))):
@@ -222,8 +223,8 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
     def format_sse_event(event_type: str, event_data: dict) -> str:
         return f"event: {event_type}\ndata: {json.dumps(event_data)}\n\n"
 
-    # Simple event queue for immediate streaming - no wrapper needed!
-    event_queue = asyncio.Queue()
+    # Queue only for intermediate events (function calls/results) - not for content
+    intermediate_queue = asyncio.Queue()
     
     # Callback to handle intermediate messages (function calls, results, etc.)
     async def handle_streaming_intermediate_steps(message: ChatMessageContent) -> None:
@@ -235,7 +236,7 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
                     "function_name": item.name,
                     "arguments": safe_serialize(item.arguments)
                 })
-                await event_queue.put(event_data)
+                await intermediate_queue.put(event_data)
                 logger.info(f"Yielded function_call event for: {item.name}")
             elif isinstance(item, FunctionResultContent):
                 event_data = format_sse_event("function_result", {
@@ -243,7 +244,7 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
                     "function_name": item.name,
                     "result": safe_serialize(item.result)
                 })
-                await event_queue.put(event_data)
+                await intermediate_queue.put(event_data)
                 logger.info(f"Yielded function_result event for: {item.name}")
             else:
                 # Handle other intermediate content if needed
@@ -251,79 +252,80 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
                     "type": "intermediate",
                     "content": str(item)
                 })
-                await event_queue.put(event_data)
+                await intermediate_queue.put(event_data)
 
-    async def stream_processor():
-        """Process the agent stream in the background."""
-        try:
-            agent = await get_agent()
-            if not agent:
-                await event_queue.put(format_sse_event("error", {"type": "error", "error": "Failed to initialize agent"}))
-                return
-
-            # Convert ShadowRequest to list[ChatMessageContent]
-            messages = create_chat_messages_from_request(request)
-            
-            thread = request.threadId
-            current_thread = AssistantAgentThread(client=agent.client, thread_id=thread) if thread else None
-            
-            
-            first_chunk = True
-            async for response in agent.invoke_stream(
-                messages=messages,
-                thread=current_thread,
-                on_intermediate_message=handle_streaming_intermediate_steps,
-            ):
-                thread = response.thread
-                if first_chunk:
-                    print(f"# {response.name}: ", end="", flush=True)
-                    first_chunk = False
-                print(response.content, end="", flush=True)
-                
-                # Handle regular response content
-                content = ""
-                if hasattr(response, 'content') and response.content is not None:
-                    content = str(response.content)
-                if content.strip():
-                    content_data = {
-                        "type": "content",
-                        "content": content
-                    }
-                    await event_queue.put(format_sse_event("content", content_data))
-            print()
-            
-            # Send stream completion event after the loop
-            await event_queue.put(format_sse_event("stream_complete", {
-                "type": "stream_complete"
-            }))
-
-        except HTTPException as exc:
-            await event_queue.put(format_sse_event("error", {"type": "error", "error": exc.detail}))
-        except Exception as e:
-            logger.exception("Unexpected error during streaming SSE.")
-            await event_queue.put(format_sse_event("error", {"type": "error", "error": str(e)}))
-        finally:
-            # Signal end of stream
-            await event_queue.put(None)
-
-    # Start background processing
-    task = asyncio.create_task(stream_processor())
-    
-    try:
-        # Yield events as they become available with minimal latency
+    async def yield_pending_intermediates():
+        """Yield any pending intermediate events without blocking."""
         while True:
-            event = await event_queue.get()
-            if event is None:  # End signal
-                break
-            yield event
-    finally:
-        # Clean up the background task
-        if not task.done():
-            task.cancel()
             try:
-                await task
-            except asyncio.CancelledError:
-                pass
+                event = intermediate_queue.get_nowait()
+                yield event
+            except asyncio.QueueEmpty:
+                break
+
+    try:
+        agent = await get_agent()
+        if not agent:
+            yield format_sse_event("error", {"type": "error", "error": "Failed to initialize agent"})
+            return        # Convert ShadowRequest to list[ChatMessageContent]
+        messages = create_chat_messages_from_request(request)
+        
+        # For OpenAIResponsesAgent, we let it handle threading internally
+        # The thread ID will be available in the response.thread property
+        threadId = request.threadId
+        current_thread = ResponsesAgentThread(client=agent.client, previous_response_id=threadId) if threadId else None
+
+        first_chunk = True
+        thread_info_sent = False
+        async for response in agent.invoke_stream(
+            messages=messages,
+            thread=current_thread,
+            on_intermediate_message=handle_streaming_intermediate_steps,
+        ):
+            # Yield any pending intermediate events first (non-blocking)
+            async for intermediate_event in yield_pending_intermediates():
+                yield intermediate_event            # Send thread info once we have the thread ID from the response
+            if not thread_info_sent and hasattr(response, 'thread') and response.thread:
+                # For OpenAIResponsesAgent, response.thread should be a string thread ID
+                thread_info_data = {
+                    "type": "thread_info",
+                    "thread_id": str(response.thread.id)
+                }
+                yield format_sse_event("thread_info", thread_info_data)
+                thread_info_sent = True
+            
+            if first_chunk:
+                print(f"# {response.name}: ", end="", flush=True)
+                first_chunk = False
+            print(response.content, end="", flush=True)
+            
+            # Handle regular response content - yield directly for lowest latency
+            content = ""
+            if hasattr(response, 'content') and response.content is not None:
+                content = str(response.content)
+            if content.strip():
+                content_data = {
+                    "type": "content",
+                    "content": content
+                }
+                yield format_sse_event("content", content_data)
+        
+        # Yield any remaining intermediate events
+        async for intermediate_event in yield_pending_intermediates():
+            yield intermediate_event
+            
+        print()
+        
+        # Send stream completion event
+        yield format_sse_event("stream_complete", {
+            "type": "stream_complete"
+        })
+
+    except HTTPException as exc:
+        yield format_sse_event("error", {"type": "error", "error": exc.detail})
+    except Exception as e:
+        logger.exception("Unexpected error during streaming SSE.")
+        yield format_sse_event("error", {"type": "error", "error": str(e)})
 
 
 @app.post("/shadow-sk")
