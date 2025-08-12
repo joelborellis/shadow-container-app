@@ -4,6 +4,8 @@ docker run -p 8000:8000 shadow-container-app
 
 docker tag shadow-container-app gtlcr.azurecr.io/shadow-container-app:latest
 
+az acr login --name gtlcr
+
 docker push gtlcr.azurecr.io/shadow-container-app:latest
 
 az containerapp env create --name shadow-container-app-env --resource-group AppServices --location eastus
