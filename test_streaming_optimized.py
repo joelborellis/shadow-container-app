@@ -10,13 +10,12 @@ import sys
 
 async def test_streaming_events():
     """Test the streaming endpoint with real-time event display."""
-    
     url = "http://localhost:8000/shadow-sk"  # Local test server
     
     # Test payload with empty threadId to create a new thread
     payload = {
         "query": "What are some synergies between my company and the prospect account?",
-        "threadId": "",  # Empty to create new thread and reset token tracking
+        "threadId": "",  # Empty to create new thread - server will return the new thread_id
         "demand_stage": "Interest",
         "AccountName": "Allina Health",
         "AccountId": "",  # Example account ID
@@ -78,7 +77,7 @@ async def test_streaming_events():
                                                 content_started = True
                                             content_buffer += data['content']
                                             print(data['content'], end="", flush=True)
-                                        elif data.get('type') in ['function_call', 'function_result', 'intermediate']:
+                                        elif data.get('type') in ['function_call', 'function_result', 'intermediate', 'thread_info']:
                                             if content_started:
                                                 print()  # New line to finish content
                                                 content_started = False
@@ -126,6 +125,10 @@ async def handle_event(data):
         
     elif event_type == 'intermediate':
         print(f"[INTERMEDIATE] {data['content']}")
+        sys.stdout.flush()
+        
+    elif event_type == 'thread_info':
+        print(f"[THREAD INFO] Thread ID: {data['thread_id']}")
         sys.stdout.flush()
         
     elif event_type == 'error':

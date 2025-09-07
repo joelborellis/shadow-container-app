@@ -68,7 +68,7 @@ class SearchCustomer:
                     }
                 ],
                 "select": "title,chunk",
-                "top": 10,
+                "top": 5,
             }
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=payload) as resp:

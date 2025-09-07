@@ -45,16 +45,16 @@ class ShadowInsightsPlugin:
 
     @kernel_function(
         name="get_customer_docs",
-        description="Given a user query determine the users request involves a target account [target_account]",
+        description="Given a user query determine the users request involves a customer / prospect AccountName",
     )
     async def get_customer_docs(
         self,
         query: Annotated[
             str,
-            "The query and the target account [target_account] name provided by the user.",
+            "The query and the AccountName provided by the user.",
         ],
-        AccountName: Annotated[str, "The name [AccountName] of the target account."],
-    ) -> Annotated[str, "Returns documents from the pursuit index."]:
+        AccountName: Annotated[str, "The name [AccountName] of the customer / prospect account."],
+    ) -> Annotated[str, "Returns documents from the customer index."]:
         try:
             # Ensure query is valid
             if not isinstance(query, str) or not query.strip():
@@ -63,33 +63,32 @@ class ShadowInsightsPlugin:
             # Perform the search
             docs = await self.search_customer_client.search_hybrid(query, AccountName)
             if not docs:
-                return "No relevant documents found in the pursuit index."
+                return "No relevant documents found in the customer index."
             return docs
         except ValueError as ve:
             return f"Input error: {ve}"
         except Exception as e:
-            return f"An error occurred while retrieving documents from the pursuit index: {e}"
+            return f"An error occurred while retrieving documents from the customer index: {e}"
 
     @kernel_function(
         name="get_user_docs",
-        description="Given a user query determine if the users request involves the company the user represents [user_company].",
+        description="Given a user query determine if the users request involves the user-company also referred to as the 'ClientName'.",
     )
     async def get_user_docs(
         self,
         query: Annotated[
             str,
-            "The query and the name of the company the user represents [user_company].",
+            "The query and the name of the user-company (ClientName).",
         ],
-        ClientId: Annotated[str, "The client ID [ClientId] of the client company."],
         ClientName: Annotated[str, "The name [ClientName] of the company the user represents."],
-    ) -> Annotated[str, "Returns documents from the pursuit index."]:
+    ) -> Annotated[str, "Returns documents from the user index."]:
         try:
             # Ensure query is valid
             if not isinstance(query, str) or not query.strip():
                 raise ValueError("The query must be a non-empty string.")
 
             # Perform the search
-            docs = await self.search_user_client.search_hybrid(query, ClientId, ClientName)
+            docs = await self.search_user_client.search_hybrid(query, ClientName)
             if not docs:
                 return "No relevant documents found in the user index."
             return docs
