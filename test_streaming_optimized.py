@@ -11,10 +11,11 @@ import sys
 async def test_streaming_events():
     """Test the streaming endpoint with real-time event display."""
     url = "http://localhost:8000/shadow-sk"  # Local test server
+    #url = "https://shadow-container-app.nicebeach-c4679607.eastus.azurecontainerapps.io/shadow-sk"  # Remote test server
     
     # Test payload with empty threadId to create a new thread
     payload = {
-        "query": "What are some synergies between my company and the prospect account?",
+        "query": "How can I best get a handle on whether it will be a profitable deal with the customer? Will it result in a satisfied client?",
         "threadId": "",  # Empty to create new thread - server will return the new thread_id
         "demand_stage": "Interest",
         "AccountName": "Allina Health",

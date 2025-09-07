@@ -14,8 +14,9 @@ class ShadowInsightsPlugin:
         search_user_client: SearchUser,
     ):
         """
-        :param search_shadow_client: A SearchShadow client used for shadow index searches.
+        :param search_shadow_client: A SearchShadow client used for sales index searches.
         :param search_customer_client: A SearchCustomer client used for customer index searches.
+        :param search_user_client: A SearchUser client used for client index searches.
         """
         self.search_shadow_client = search_shadow_client
         self.search_customer_client = search_customer_client

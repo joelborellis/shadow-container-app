@@ -123,7 +123,10 @@ Context:
 
 Use this framework to deliver **concise, high‑impact** guidance that accelerates every sales pursuit.
 
-Always return your response in html format with markdown syntax for rich text formatting."""
+You are a strict Markdown-only writer. Output MUST be valid GitHub-Flavored Markdown.
+
+OUTPUT FORMAT RULES:
+1) Output ONLY formatted HTML."""
 
 
 # Define request body model
@@ -204,6 +207,7 @@ async def get_agent() -> Optional[OpenAIResponsesAgent]:
             instructions=INSTRUCTIONS,
             plugins=[shadow_plugin],
             store_enabled=True,
+            additional_instructions="Return only formatted HTML responses per your rules."
         )
 
         if agent is None:

@@ -50,7 +50,8 @@ class SearchUser:
 
     async def search_hybrid(self, query: str, ClientName: str) -> str:
         try:
-            vector = await self.get_embedding(query, self.model)
+            combined_text = f"{query} {ClientName}"
+            vector = await self.get_embedding(combined_text, self.model)
             if not vector:
                 return "No results found."
             url = f"{self.endpoint}/indexes/{self.index}/docs/search?api-version=2023-10-01-Preview"
@@ -59,7 +60,7 @@ class SearchUser:
                 "api-key": self.admin_key,
             }
             payload = {
-                "search": query,
+                "search": combined_text,
                 "vectorQueries": [
                     {
                         "kind": "vector",
