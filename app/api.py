@@ -5,17 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel
 import json
-import os
 import logging
 import asyncio
-import time
-from collections import defaultdict
 
 from .tools.searchshadow import SearchShadow
 from .tools.searchcustomer import SearchCustomer
 from .tools.searchclient import SearchUser
 
-from semantic_kernel.agents import OpenAIAssistantAgent, OpenAIResponsesAgent, ResponsesAgentThread
+from semantic_kernel.agents import OpenAIResponsesAgent, ResponsesAgentThread
 from semantic_kernel.contents.chat_message_content import (
     ChatMessageContent,
     FunctionCallContent,
@@ -40,11 +37,11 @@ app.add_middleware(
 )
 
 # Configure module-level logger
-logger = logging.getLogger("__init__.py")
+logger = logging.getLogger("api.py")
 logger.setLevel(logging.INFO)
 
 INSTRUCTIONS="""### Purpose  
-You are the **Sales Training Agent**. Your mission is to deliver **relevant, practical, and decisive guidance** for users working on active sales pursuits. Leverage the **`shadowRetrievalPlugin`** to pull the right material at the right moment.
+You are the **Sales Training Agent**. Your mission is to deliver **relevant, practical, and decisive guidance** for users working on active sales pursuits. Leverage the **`shadowRetrievalPlugin`** to pull the right content to help answer the users query.
 
 ---
 
@@ -53,8 +50,8 @@ You are the **Sales Training Agent**. Your mission is to deliver **relevant, pra
 | Field | Meaning | How to Use |
 |-------|---------|-----------|
 | **Query**           | The user’s actual question | Use it to decide what advice is needed. |
-| **AccountName**     | Target customer / prospect | Pass to `get_customer_docs` when you need account-specific info. |
-| **ClientName / ClientId** | The user’s own company identifiers | Pass to `get_user_docs` when you need user-company specific info. user-company is also referred to as the 'ClientName' |
+| **AccountName**     | Target customer / prospect account | Pass to `get_customer_docs` when you need target or prospect account-specific info. |
+| **ClientName** | The user’s own company name | Pass to `get_user_docs` when you need user-company specific info. |
 | **Demand Stage**    | Current sales‑cycle stage (e.g., *Interest*, *Evaluation*) | Tailor depth and tactics to this stage. |
 
 <details>
@@ -65,7 +62,6 @@ Query: What are some synergies between my company and the prospect account?
 Context:
   AccountName: Allina Health
   ClientName: Growth Orbit
-  ClientId: 112655FE-87CB-429B-A7B5-33342DAA9CA8
   Demand Stage: Interest
 ```
 </details>
@@ -109,7 +105,7 @@ Context:
    * Account‑specific → call `get_customer_docs` with AccountName - *Allina Health*
 
 3. **Craft Response:**  
-   *Blend playbook insights with customer intel; finish with an action checklist and one or two reflective questions.*
+   *Blend sales playbook insights with customer account intel; finish with an action checklist and one or two reflective questions.*
    
 ### Example Workflow 2
 
@@ -117,11 +113,11 @@ Context:
    “Help me assess the synergies between my company and the prospect account.”
 
 2. **You Decide:**   
-   * User-company-specific (ClientName) → call `get_user_docs` with ClientName
+   * User-company-specific → call `get_user_docs` with ClientName
    * Account‑specific → call `get_customer_docs` with AccountName
 
 3. **Craft Response:**  
-   *Blend User-company-specific (ClientName) and Account-specific insights; finish with an action checklist and one or two reflective questions.*
+   *Blend User-company-specific and Account-specific insights; finish with an action checklist and one or two reflective questions.*
 
 ---
 
@@ -167,8 +163,6 @@ def create_chat_messages_from_request(request: ShadowRequest) -> list[ChatMessag
         context_parts.append(f"AccountName: {request.AccountName}")
     if request.ClientName:
         context_parts.append(f"ClientName: {request.ClientName}")
-    if request.ClientId:
-        context_parts.append(f"ClientId: {request.ClientId}")
     if request.demand_stage:
         context_parts.append(f"Demand Stage: {request.demand_stage}")
     #if request.PursuitId:
@@ -305,12 +299,7 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
                 }
                 yield format_sse_event("thread_info", thread_info_data)
                 thread_info_sent = True
-            
-            #if first_chunk:
-                #print(f"# {response.name}: ", end="", flush=True)
-                #first_chunk = False
-            #print(response.content, end="", flush=True)
-            
+        
             # Handle regular response content - yield directly for lowest latency
             content = ""
             if hasattr(response, 'content') and response.content is not None:
@@ -325,8 +314,6 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
         # Yield any remaining intermediate events
         async for intermediate_event in yield_pending_intermediates():
             yield intermediate_event
-            
-        print()
         
         # Send stream completion event
         yield format_sse_event("stream_complete", {
