@@ -50,7 +50,6 @@ class SearchUser:
 
     async def search_hybrid(self, query: str, ClientName: str) -> str:
         try:
-            print(f"[SearchClient] Performing hybrid search for query: {query}  - {ClientName}")
             vector = await self.get_embedding(query, self.model)
             if not vector:
                 return "No results found."

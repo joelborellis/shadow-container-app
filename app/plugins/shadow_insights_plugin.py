@@ -51,7 +51,7 @@ class ShadowInsightsPlugin:
         self,
         query: Annotated[
             str,
-            "The query and the AccountName provided by the user.",
+            "The query and the AccountName provided by the user.  Only use the AccountName portion of the query to search the customer index.",
         ],
         AccountName: Annotated[str, "The name [AccountName] of the customer / prospect account."],
     ) -> Annotated[str, "Returns documents from the customer index."]:
@@ -72,16 +72,16 @@ class ShadowInsightsPlugin:
 
     @kernel_function(
         name="get_user_docs",
-        description="Given a user query determine if the users request involves the user-company also referred to as the 'ClientName'.",
+        description="Given a user query determine if the users request involves the company the user represents.  Also referred to as the ClientName.",
     )
     async def get_user_docs(
         self,
         query: Annotated[
             str,
-            "The query and the name of the user-company (ClientName).",
+            "The query and the ClientName provided by the user.  Only use the ClientName portion of the query to search the user index.",
         ],
         ClientName: Annotated[str, "The name [ClientName] of the company the user represents."],
-    ) -> Annotated[str, "Returns documents from the user index."]:
+    ) -> Annotated[str, "Returns documents from the client index."]:
         try:
             # Ensure query is valid
             if not isinstance(query, str) or not query.strip():

@@ -121,7 +121,9 @@ Context:
 
 ---
 
-Use this framework to deliver **concise, high‑impact** guidance that accelerates every sales pursuit."""
+Use this framework to deliver **concise, high‑impact** guidance that accelerates every sales pursuit.
+
+Always return your response in html format with markdown syntax for rich text formatting."""
 
 
 # Define request body model
