@@ -8,8 +8,6 @@ import json
 import os
 import logging
 import asyncio
-import time
-from collections import defaultdict
 
 from .tools.searchshadow import SearchShadow
 from .tools.searchcustomer import SearchCustomer
