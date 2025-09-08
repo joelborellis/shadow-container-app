@@ -54,7 +54,7 @@ class SearchUser:
             vector = await self.get_embedding(combined_text, self.model)
             if not vector:
                 return "No results found."
-            url = f"{self.endpoint}/indexes/{self.index}/docs/search?api-version=2023-10-01-Preview"
+            url = f"{self.endpoint}/indexes/{self.index}/docs/search?api-version=2025-05-01-Preview"
             headers = {
                 "Content-Type": "application/json",
                 "api-key": self.admin_key,
