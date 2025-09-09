@@ -204,10 +204,11 @@ async def get_agent() -> Optional[OpenAIResponsesAgent]:
             ai_model_id="gpt-4.1-mini",
             client=client,
             name="ShadowInsightsAgent",
+            instruction_role="SYSTEM",
             instructions=INSTRUCTIONS,
             plugins=[shadow_plugin],
             store_enabled=True,
-            additional_instructions="Return only formatted HTML responses per your rules."
+            #additional_instructions="Return only formatted HTML responses per your rules."
         )
 
         if agent is None:
@@ -279,15 +280,14 @@ async def event_stream(request: ShadowRequest) -> AsyncGenerator[str, None]:
         agent = await get_agent()
         if not agent:
             yield format_sse_event("error", {"type": "error", "error": "Failed to initialize agent"})
-            return        # Convert ShadowRequest to list[ChatMessageContent]
-        messages = create_chat_messages_from_request(request)
+            return        
+        messages = create_chat_messages_from_request(request)  # Convert ShadowRequest to list[ChatMessageContent]
         
         # For OpenAIResponsesAgent, we let it handle threading internally
         # The thread ID will be available in the response.thread property
         threadId = request.threadId
         current_thread = ResponsesAgentThread(client=agent.client, previous_response_id=threadId) if threadId else None
 
-        first_chunk = True
         thread_info_sent = False
         async for response in agent.invoke_stream(
             messages=messages,
