@@ -170,8 +170,6 @@ def create_chat_messages_from_request(request: ShadowRequest) -> list[ChatMessag
         context_parts.append(f"ClientName: {request.ClientName}")
     if request.demand_stage:
         context_parts.append(f"Demand Stage: {request.demand_stage}")
-    #if request.PursuitId:
-        #context_parts.append(f"Pursuit ID: {request.PursuitId}")
     
     # Combine query with context
     if context_parts:
@@ -213,11 +211,11 @@ async def get_agent() -> Optional[OpenAIResponsesAgent]:
 
         if agent is None:
             logger.error(
-                    "Failed to retrieve the assistant agent. Please check the assistant ID."
+                    "Failed to create the assistant agent."
                 )
             return None
     except Exception as e:
-        logger.error("An error occurred while retrieving the assistant agent: %s", e)
+        logger.error("An error occurred while creating the assistant agent: %s", e)
         return None
 
     return agent

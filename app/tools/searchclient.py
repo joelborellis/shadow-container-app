@@ -69,6 +69,7 @@ class SearchUser:
                         "fields": "text_vector",
                     }
                 ],
+                "filter": f"ClientName eq '{ClientName}'",
                 "select": "title,OriginalFilename,chunk",
                 "top": 5,
             }
