@@ -10,8 +10,8 @@ import sys
 
 async def test_streaming_events():
     """Test the streaming endpoint with real-time event display."""
-    #url = "http://localhost:8000/shadow-sk"  # Local test server
-    url = "https://shadow-container-app.nicebeach-c4679607.eastus.azurecontainerapps.io/shadow-sk"  # Remote test server
+    url = "http://localhost:8000/shadow-sk"  # Local test server
+    #url = "https://shadow-container-app.nicebeach-c4679607.eastus.azurecontainerapps.io/shadow-sk"  # Remote test server
     
     # Test payload with empty threadId to create a new thread
     payload = {

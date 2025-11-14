@@ -192,7 +192,7 @@ async def get_agent() -> Optional[OpenAIResponsesAgent]:
 
     try:
         # 1. Create the client using Azure OpenAI resources and configuration
-        client = OpenAIResponsesAgent.create_client(ai_model_id="gpt-4.1-mini")
+        client = OpenAIResponsesAgent.create_client(ai_model_id="gpt-5.1")
 
         # 2. Instantiate ShadowInsightsPlugin and pass the search clients
         shadow_plugin = ShadowInsightsPlugin(
@@ -201,7 +201,7 @@ async def get_agent() -> Optional[OpenAIResponsesAgent]:
 
         # 3. Create a Semantic Kernel agent for the OpenAI Responses API
         agent = OpenAIResponsesAgent(
-            ai_model_id="gpt-4.1-mini",
+            ai_model_id="gpt-5.1",
             client=client,
             name="ShadowInsightsAgent",
             instruction_role="SYSTEM",
