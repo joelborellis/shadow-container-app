@@ -9,7 +9,7 @@ import logging
 import asyncio
 
 from .tools.searchshadow import SearchShadow
-from .tools.searchcustomer import SearchCustomer
+from .tools.searchtarget import SearchTarget
 from .tools.searchclient import SearchUser
 
 from semantic_kernel.agents import OpenAIResponsesAgent, ResponsesAgentThread
@@ -144,7 +144,7 @@ class ShadowRequest(BaseModel):
 
 # Instantiate search clients as singletons (if they are thread-safe or handle concurrency internally)
 search_shadow_client = SearchShadow()
-search_customer_client = SearchCustomer()
+search_customer_client = SearchTarget()
 search_user_client = SearchUser()
 
 def create_chat_messages_from_request(request: ShadowRequest) -> list[ChatMessageContent]:

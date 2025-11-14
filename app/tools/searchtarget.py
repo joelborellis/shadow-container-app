@@ -7,32 +7,32 @@ from .utils.clean_text import clean_text
 load_dotenv()
 
 
-class SearchCustomer:
+class SearchTarget:
     def __init__(self):
         try:
             AZURE_SEARCH_ENDPOINT = os.environ.get("AZURE_SEARCH_ENDPOINT")
             AZURE_SEARCH_ADMIN_KEY = os.environ.get("AZURE_SEARCH_ADMIN_KEY")
-            AZURE_SEARCH_INDEX_CUSTOMER = os.environ.get("AZURE_SEARCH_INDEX_CUSTOMER")
-            OPENAI_EMBED_MODEL = os.environ.get("OPENAI_EMBED_MODEL")
+            AZURE_SEARCH_INDEX_TARGET = os.environ.get("AZURE_SEARCH_INDEX_TARGET")
+            OPENAI_EMBED_MODEL_LARGE = os.environ.get("OPENAI_EMBED_MODEL")
 
             if (
                 not AZURE_SEARCH_ENDPOINT
                 or not AZURE_SEARCH_ADMIN_KEY
-                or not AZURE_SEARCH_INDEX_CUSTOMER
-                or not OPENAI_EMBED_MODEL
+                or not AZURE_SEARCH_INDEX_TARGET
+                or not OPENAI_EMBED_MODEL_LARGE
             ):
                 raise EnvironmentError(
                     "Missing one or more environment variables required for initialization."
                 )
 
             self.endpoint = AZURE_SEARCH_ENDPOINT
-            self.index = AZURE_SEARCH_INDEX_CUSTOMER
+            self.index = AZURE_SEARCH_INDEX_TARGET
             self.admin_key = AZURE_SEARCH_ADMIN_KEY
-            self.model = OPENAI_EMBED_MODEL
+            self.model = OPENAI_EMBED_MODEL_LARGE
             self.openai_client = AsyncOpenAI()
 
             print(
-                f"[SearchCustomer]:  Init SearchCustomer for index - {AZURE_SEARCH_INDEX_CUSTOMER}"
+                f"[SearchCustomer]:  Init SearchCustomer for index - {AZURE_SEARCH_INDEX_TARGET}"
             )
         except Exception as e:
             raise RuntimeError(f"Error initializing SearchCustomer: {e}")
@@ -70,7 +70,8 @@ class SearchCustomer:
                         "fields": "text_vector",
                     }
                 ],
-                "select": "title,chunk",
+                "filter": f"ClientName eq '{AccountName}'",
+                "select": "title,OriginalFilename,chunk",
                 "top": 5,
             }
             async with aiohttp.ClientSession() as session:
@@ -84,8 +85,10 @@ class SearchCustomer:
                     docs = data.get("value", [])
                     if not docs:
                         return "No results found."
-                    results = [f"{doc['title']}:  {clean_text(doc['chunk'])}" for doc in docs]
-                    #print(f"[SearchCustomer] Found {results} results.")
+                    results = [
+                        f"{doc['OriginalFilename']}:  {clean_text(doc['chunk'])}"
+                        for doc in docs
+                    ]
                     return "\n".join(results)
         except Exception as e:
             return f"Error performing hybrid search: {e}"

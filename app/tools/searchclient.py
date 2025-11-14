@@ -14,13 +14,13 @@ class SearchUser:
             AZURE_SEARCH_ENDPOINT = os.environ.get("AZURE_SEARCH_ENDPOINT")
             AZURE_SEARCH_ADMIN_KEY = os.environ.get("AZURE_SEARCH_ADMIN_KEY")
             AZURE_SEARCH_INDEX_CLIENT = os.environ.get("AZURE_SEARCH_INDEX_CLIENT")
-            OPENAI_EMBED_MODEL_CLIENT = os.environ.get("OPENAI_EMBED_MODEL_CLIENT")
+            OPENAI_EMBED_MODEL_LARGE = os.environ.get("OPENAI_EMBED_MODEL_LARGE")
 
             if (
                 not AZURE_SEARCH_ENDPOINT
                 or not AZURE_SEARCH_ADMIN_KEY
                 or not AZURE_SEARCH_INDEX_CLIENT
-                or not OPENAI_EMBED_MODEL_CLIENT
+                or not OPENAI_EMBED_MODEL_LARGE
             ):
                 raise EnvironmentError(
                     "Missing one or more environment variables required for initialization."
@@ -29,7 +29,7 @@ class SearchUser:
             self.endpoint = AZURE_SEARCH_ENDPOINT
             self.index = AZURE_SEARCH_INDEX_CLIENT
             self.admin_key = AZURE_SEARCH_ADMIN_KEY
-            self.model = OPENAI_EMBED_MODEL_CLIENT
+            self.model = OPENAI_EMBED_MODEL_LARGE
             self.openai_client = AsyncOpenAI()
 
             print(

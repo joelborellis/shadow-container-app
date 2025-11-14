@@ -1,7 +1,7 @@
 from typing import Annotated
 from semantic_kernel.functions.kernel_function_decorator import kernel_function
 from ..tools.searchshadow import SearchShadow
-from ..tools.searchcustomer import SearchCustomer
+from ..tools.searchtarget import SearchTarget
 from ..tools.searchclient import SearchUser
 
 
@@ -10,7 +10,7 @@ class ShadowInsightsPlugin:
     def __init__(
         self,
         search_shadow_client: SearchShadow,
-        search_customer_client: SearchCustomer,
+        search_customer_client: SearchTarget,
         search_user_client: SearchUser,
     ):
         """
