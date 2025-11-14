@@ -13,7 +13,7 @@ class SearchTarget:
             AZURE_SEARCH_ENDPOINT = os.environ.get("AZURE_SEARCH_ENDPOINT")
             AZURE_SEARCH_ADMIN_KEY = os.environ.get("AZURE_SEARCH_ADMIN_KEY")
             AZURE_SEARCH_INDEX_TARGET = os.environ.get("AZURE_SEARCH_INDEX_TARGET")
-            OPENAI_EMBED_MODEL_LARGE = os.environ.get("OPENAI_EMBED_MODEL")
+            OPENAI_EMBED_MODEL_LARGE = os.environ.get("OPENAI_EMBED_MODEL_LARGE")
 
             if (
                 not AZURE_SEARCH_ENDPOINT
@@ -32,10 +32,10 @@ class SearchTarget:
             self.openai_client = AsyncOpenAI()
 
             print(
-                f"[SearchCustomer]:  Init SearchCustomer for index - {AZURE_SEARCH_INDEX_TARGET}"
+                f"[SearchTarget]:  Init SearchTarget for index - {AZURE_SEARCH_INDEX_TARGET}"
             )
         except Exception as e:
-            raise RuntimeError(f"Error initializing SearchCustomer: {e}")
+            raise RuntimeError(f"Error initializing SearchTarget: {e}")
 
     async def get_embedding(self, text, model):
         try:
@@ -70,7 +70,7 @@ class SearchTarget:
                         "fields": "text_vector",
                     }
                 ],
-                "filter": f"ClientName eq '{AccountName}'",
+                "filter": f"AccountName eq '{AccountName}'",
                 "select": "title,OriginalFilename,chunk",
                 "top": 5,
             }
